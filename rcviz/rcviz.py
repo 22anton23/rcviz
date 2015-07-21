@@ -179,15 +179,15 @@ class viz(object):
                 args, kwargs, self.wrapped.__name__, None, [])
 
         edgeinfo = None
-        if caller_frame_id:
-            edgeinfo = this_frame_id, callgraph.get_counter()
+        if caller_frame_id in g_callers:
+            edgeinfo = [this_frame_id, callgraph.get_counter()]
             g_callers[caller_frame_id].child_methods.append(edgeinfo)
             callgraph.increment()
 
         # invoke wraped
         ret = self.wrapped(*args, **kwargs)
 
-        if (self._verbose):
+        if self._verbose:
             logging.debug('unwinding frame id: %s' % this_frame_id)
 
         if edgeinfo:
@@ -195,5 +195,4 @@ class viz(object):
             callgraph.increment_unwind()
 
         g_callers[this_frame_id].ret = copy.deepcopy(ret)
-
         return ret
