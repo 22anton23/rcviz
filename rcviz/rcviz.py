@@ -63,16 +63,11 @@ class callgraph(object):
 
         # create nodes
         for frame_id, node in callgraph._callers.items():
-
-            auxstr = ""
-            for param, val in node.auxdata.items():
-                auxstr += " | %s: %s" % (param, val)
-
             if not show_null_returns and node.ret is None:
-                label = "{ %s(%s) %s }" % (node.fn_name, node.argstr(), auxstr)
+                label = "{ %s(%s) }" % (node.f_name, node.argstr())
             else:
-                label = "{ %s(%s) %s | ret: %s }" % (
-                    node.fn_name, node.argstr(), auxstr, node.ret)
+                label = "{ %s(%s) | ret: %s }" % (
+                    node.f_name, node.argstr(), node.ret)
             g.add_node(frame_id, shape='Mrecord', label=label,
                        fontsize=13, labelfontsize=13)
 
@@ -87,9 +82,7 @@ class callgraph(object):
                 child_nodes.append(child_id)
                 cur_color = step * counter
                 color = "#%2x%2x%2x" % (cur_color, cur_color, cur_color)
-                label = "%s (&uArr;%s)" % (counter, unwind_counter)
-                g.add_edge(frame_id, child_id, label=label, color=color,
-                           fontsize=8, labelfontsize=8, fontcolor="#999999")
+                g.add_edge(frame_id, child_id, color=color)
 
             # order edges l to r
             if len(child_nodes) > 1:
@@ -101,37 +94,31 @@ class callgraph(object):
                         sg.add_edge(prev_node,  child_node, color="#ffffff")
                     prev_node = child_node
 
-            #logging.info( "%s, %s" % (frame_id, node) )
-
         g.layout()
-
         g.draw(path=filename, prog='dot')
 
         print("callviz: rendered to %s" % filename)
 
 
 class node_data(object):
-    def __init__(self, _args=None, _kwargs=None, _fnname="", _ret=None,
-                 _childmethods=[]):
-        self.args = _args
-        self.kwargs = _kwargs
-        self.fn_name = _fnname
-        self.ret = _ret
-        self.child_methods = _childmethods  # [ (method, gcounter) ]
-
-        self.auxdata = {}  # user assigned track data
+    def __init__(self, args, kwargs, f_name, ret, child_methods):
+        self.args = args
+        self.kwargs = kwargs
+        self.f_name = f_name
+        self.ret = ret
+        self.child_methods = child_methods  # [ (method, gcounter) ]
 
     def __str__(self):
         return "%s -> child_methods: %s" % (self.nodestr(), self.child_methods)
 
     def nodestr(self):
-        return "%s = %s(%s)" % (self.ret, self.fn_name, self.argstr())
+        return "{0.ret} = {0.fn_name}{1}".format(self, self.argstr())
 
     def argstr(self):
-        s_args = ",".join([str(arg) for arg in self.args])
-        s_kwargs = ",".join([(str(k), str(v))
-                             for (k, v) in list(self.kwargs.items())])
-        return "%s%s" % (s_args, s_kwargs)
+        s_args = ", ".join(map(str, self.args))
+        s_kwargs = ", ".join(
+            "{0}={1}".format(k, v) for k, v in self.kwargs.items())
+        return s_args + s_kwargs
 
 
 class viz(object):
@@ -141,13 +128,6 @@ class viz(object):
     def __init__(self, wrapped):
         self._verbose = False
         self.wrapped = wrapped
-
-    def track(self, **kwargs):
-        call_frame_id = id(inspect.stack()[2][0])
-        g_callers = callgraph.get_callers()
-        node = g_callers.get(call_frame_id)
-        if node:
-            node.auxdata.update(copy.deepcopy(kwargs))
 
     def __call__(self, *args, **kwargs):
         g_callers = callgraph.get_callers()
