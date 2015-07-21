@@ -60,11 +60,11 @@ class callgraph(object):
 		g.graph_attr['label']='nodes=%s' % len(callgraph._callers)
 
 		# create nodes
-		for frame_id, node in callgraph._callers.iteritems():
+		for frame_id, node in callgraph._callers.items():
 
 			auxstr = ""
-			for param, val in node.auxdata.iteritems():
-				auxstr += " | %s: %s" % (param, val) 
+			for param, val in node.auxdata.items():
+				auxstr += " | %s: %s" % (param, val)
 
 			if not show_null_returns and node.ret is None:
 				label= "{ %s(%s) %s }" % (node.fn_name, node.argstr(), auxstr)
@@ -77,7 +77,7 @@ class callgraph(object):
 		cur_color = 0
 
 		# create edges
-		for frame_id, node in callgraph._callers.iteritems():
+		for frame_id, node in callgraph._callers.items():
 			child_nodes = []
 			for child_id, counter, unwind_counter in node.child_methods:
 				child_nodes.append(child_id)
@@ -102,16 +102,16 @@ class callgraph(object):
 
 		g.draw(path=filename, prog='dot')
 
-		print "callviz: rendered to %s" % filename
+		print("callviz: rendered to %s" % filename)
 
 class node_data(object):
 
-	def __init__(self, _args=None, _kwargs=None, _fnname="", _ret=None, _childmethods=[]):
+	def __init__(self, _args=None, _kwargs=None, _fnname="", _ret=None, _childmethods=None):
 		self.args  	= _args
 		self.kwargs = _kwargs
 		self.fn_name = _fnname
 		self.ret	= _ret
-		self.child_methods = _childmethods	# [ (method, gcounter) ]
+		self.child_methods = _childmethods or []	# [ (method, gcounter) ]
 
 		self.auxdata = {} # user assigned track data
 
@@ -123,7 +123,7 @@ class node_data(object):
 
 	def argstr(self):
 		s_args =  ",".join( [str(arg) for arg in self.args] )
-		s_kwargs = ",".join( [(str(k), str(v)) for (k,v) in self.kwargs.items()] )
+		s_kwargs = ",".join( [(str(k), str(v)) for (k,v) in list(self.kwargs.items())] )
 		return "%s%s" % (s_args, s_kwargs)
 
 class viz(object):
@@ -165,7 +165,7 @@ class viz(object):
 		if this_frame_id not in g_frames:
 			g_frames.append( fullstack[0][0] )
 
-		if  this_frame_id not in g_callers.keys():
+		if  this_frame_id not in list(g_callers.keys()):
 			g_callers[this_frame_id] = node_data(args, kwargs, self.wrapped.__name__, None, [])
 
 		edgeinfo = None
@@ -187,4 +187,3 @@ class viz(object):
 		g_callers[this_frame_id].ret = copy.deepcopy(ret)
 
 		return ret
-
