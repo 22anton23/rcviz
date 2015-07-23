@@ -98,6 +98,7 @@ class callgraph(object):
         g.draw(path=filename, prog='dot')
 
         print("callviz: rendered to %s" % filename)
+        callgraph.reset()
 
 
 class node_data(object):
