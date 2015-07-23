@@ -3,7 +3,6 @@
 # Licensed under the GPLv2, which is available at
 # http://www.gnu.org/licenses/gpl-2.0.html
 
-
 import copy
 import inspect
 import logging
@@ -12,58 +11,24 @@ from pygraphviz import AGraph
 
 
 class callgraph(object):
+    def __init__(self):
+        self.callers = {}  # caller_fn_id : node_data
+        self.frames = []   # keep frame objects reference
+        self.depth = 0     # stack depth
+        self.counter = 1   # track call order
 
-    '''singleton class that stores global graph data
-       draw graph using pygraphviz
-    '''
+    def clear(self):
+        self.callers.clear()
+        self.frames.clear()
+        self.depth = self.counter = 0
 
-    _callers = {}  # caller_fn_id : node_data
-    _counter = 1  # track call order
-    _unwindcounter = 1  # track unwind order
-    _frames = []  # keep frame objects reference
-
-    @staticmethod
-    def reset():
-        callgraph._callers = {}
-        callgraph._counter = 1
-        callgraph._frames = []
-        callgraph._unwindcounter = 1
-
-    @staticmethod
-    def get_callers():
-        return callgraph._callers
-
-    @staticmethod
-    def get_counter():
-        return callgraph._counter
-
-    @staticmethod
-    def get_unwindcounter():
-        return callgraph._unwindcounter
-
-    @staticmethod
-    def increment():
-        callgraph._counter += 1
-
-    @staticmethod
-    def increment_unwind():
-        callgraph._unwindcounter += 1
-
-    @staticmethod
-    def get_frames():
-        return callgraph._frames
-
-    @staticmethod
-    def render(filename, show_null_returns=True):
-        if not filename:
-            filename = "out.svg"
-
+    def render(self, filename, show_none_returns=True):
         g = AGraph(strict=False, directed=True)
-        g.graph_attr['label'] = 'nodes=%s' % len(callgraph._callers)
+        g.graph_attr['label'] = 'nodes=%s' % len(self.callers)
 
         # create nodes
-        for frame_id, node in callgraph._callers.items():
-            if not show_null_returns and node.ret is None:
+        for frame_id, node in self.callers.items():
+            if not show_none_returns and node.ret is None:
                 label = "{ %s(%s) }" % (node.f_name, node.argstr())
             else:
                 label = "{ %s(%s) | ret: %s }" % (
@@ -72,13 +37,13 @@ class callgraph(object):
                        fontsize=13, labelfontsize=13)
 
         # edge colors
-        step = 200 / callgraph._counter
+        step = 200 / self.counter
         cur_color = 0
 
         # create edges
-        for frame_id, node in callgraph._callers.items():
+        for frame_id, node in self.callers.items():
             child_nodes = []
-            for child_id, counter, unwind_counter in node.child_methods:
+            for child_id, counter in node.child_methods:
                 child_nodes.append(child_id)
                 cur_color = step * counter
                 color = "#%2x%2x%2x" % (cur_color, cur_color, cur_color)
@@ -98,7 +63,7 @@ class callgraph(object):
         g.draw(path=filename, prog='dot')
 
         print("callviz: rendered to %s" % filename)
-        callgraph.reset()
+        self.clear()
 
 
 class node_data(object):
@@ -127,29 +92,30 @@ class viz(object):
     as labels'''
 
     def __init__(self, wrapped):
-        self._verbose = False
+        self.verbose = False
         self.wrapped = wrapped
+        self.cg = callgraph()
 
     def __call__(self, *args, **kwargs):
-        g_callers = callgraph.get_callers()
-        g_frames = callgraph.get_frames()
+        g_callers = self.cg.callers
+        g_frames = self.cg.frames
 
         # find the caller frame, and add self as a child node
         caller_frame_id = None
 
         fullstack = inspect.stack()
 
-        if self._verbose:
+        if self.verbose:
             logging.debug("full stack: %s" % str(fullstack))
 
         if len(fullstack) > 2:
             caller_frame_id = id(fullstack[2][0])
-            if self._verbose:
+            if self.verbose:
                 logging.debug("caller frame: %s %s" %
                               (caller_frame_id, fullstack[2]))
 
         this_frame_id = id(fullstack[0][0])
-        if self._verbose:
+        if self.verbose:
             logging.info("this frame: %s %s" % (this_frame_id, fullstack[0]))
 
         if this_frame_id not in g_frames:
@@ -161,19 +127,21 @@ class viz(object):
 
         edgeinfo = None
         if caller_frame_id in g_callers:
-            edgeinfo = [this_frame_id, callgraph.get_counter()]
+            edgeinfo = this_frame_id, self.cg.counter
             g_callers[caller_frame_id].child_methods.append(edgeinfo)
-            callgraph.increment()
+            self.cg.counter += 1
 
         # invoke wraped
+        self.cg.depth += 1
         ret = self.wrapped(*args, **kwargs)
+        self.cg.depth -= 1
 
-        if self._verbose:
+        if self.verbose:
             logging.debug('unwinding frame id: %s' % this_frame_id)
 
-        if edgeinfo:
-            edgeinfo.append(callgraph.get_unwindcounter())
-            callgraph.increment_unwind()
-
         g_callers[this_frame_id].ret = copy.deepcopy(ret)
+
+        if not self.cg.depth:
+            self.cg.render(self.wrapped.__name__ + ".png")
+
         return ret
