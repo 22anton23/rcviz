@@ -15,39 +15,28 @@ class callgraph(object):
         self.callers = {}  # caller_fn_id : node_data
         self.frames = []   # keep frame objects reference
         self.depth = 0     # stack depth
-        self.counter = 1   # track call order
 
     def clear(self):
         self.callers.clear()
         self.frames.clear()
-        self.depth = self.counter = 0
+        self.depth = 0
 
-    def render(self, filename, show_none_returns=True):
+    def render(self, filename):
         g = AGraph(strict=False, directed=True)
-        g.graph_attr['label'] = 'nodes=%s' % len(self.callers)
 
         # create nodes
         for frame_id, node in self.callers.items():
-            if not show_none_returns and node.ret is None:
-                label = "{ %s(%s) }" % (node.f_name, node.argstr())
-            else:
-                label = "{ %s(%s) | ret: %s }" % (
-                    node.f_name, node.argstr(), node.ret)
+            label = "{ %s(%s) | ret: %s }" % \
+                (node.f_name, node.argstr(), node.ret)
             g.add_node(frame_id, shape='Mrecord', label=label,
                        fontsize=13, labelfontsize=13)
-
-        # edge colors
-        step = 200 / self.counter
-        cur_color = 0
 
         # create edges
         for frame_id, node in self.callers.items():
             child_nodes = []
-            for child_id, counter in node.child_methods:
+            for child_id in node.child_methods:
                 child_nodes.append(child_id)
-                cur_color = step * counter
-                color = "#%2x%2x%2x" % (cur_color, cur_color, cur_color)
-                g.add_edge(frame_id, child_id, color=color)
+                g.add_edge(frame_id, child_id)
 
             # order edges l to r
             if len(child_nodes) > 1:
@@ -56,7 +45,7 @@ class callgraph(object):
                 prev_node = None
                 for child_node in child_nodes:
                     if prev_node:
-                        sg.add_edge(prev_node,  child_node, color="#ffffff")
+                        sg.add_edge(prev_node, child_node, color="#ffffff")
                     prev_node = child_node
 
         g.layout()
@@ -72,7 +61,7 @@ class node_data(object):
         self.kwargs = kwargs
         self.f_name = f_name
         self.ret = ret
-        self.child_methods = child_methods  # [ (method, gcounter) ]
+        self.child_methods = child_methods
 
     def __str__(self):
         return "%s -> child_methods: %s" % (self.nodestr(), self.child_methods)
@@ -92,8 +81,8 @@ class viz(object):
     as labels'''
 
     def __init__(self, wrapped):
-        self.verbose = False
         self.wrapped = wrapped
+        self.verbose = False
         self.cg = callgraph()
 
     def __call__(self, *args, **kwargs):
@@ -125,13 +114,9 @@ class viz(object):
             g_callers[this_frame_id] = node_data(
                 args, kwargs, self.wrapped.__name__, None, [])
 
-        edgeinfo = None
         if caller_frame_id in g_callers:
-            edgeinfo = this_frame_id, self.cg.counter
-            g_callers[caller_frame_id].child_methods.append(edgeinfo)
-            self.cg.counter += 1
+            g_callers[caller_frame_id].child_methods.append(this_frame_id)
 
-        # invoke wraped
         self.cg.depth += 1
         ret = self.wrapped(*args, **kwargs)
         self.cg.depth -= 1
