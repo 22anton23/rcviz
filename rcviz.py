@@ -1,5 +1,6 @@
 # rcviz : a small recursion call graph vizualization decorator
 # Copyright (c) Ran Dugal 2014
+#               Sergei Lebedev 2015
 # Licensed under the GPLv2, which is available at
 # http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -10,7 +11,7 @@ import logging
 from pygraphviz import AGraph
 
 
-class callgraph(object):
+class CallGraph(object):
     def __init__(self):
         self.callers = {}  # caller_fn_id : node_data
         self.frames = []   # keep frame objects reference
@@ -26,8 +27,7 @@ class callgraph(object):
 
         # create nodes
         for frame_id, node in self.callers.items():
-            label = "{ %s(%s) | ret: %s }" % \
-                (node.f_name, node.argstr(), node.ret)
+            label = "{ %s }" % node
             g.add_node(frame_id, shape='Mrecord', label=label,
                        fontsize=13, labelfontsize=13)
 
@@ -55,25 +55,22 @@ class callgraph(object):
         self.clear()
 
 
-class node_data(object):
-    def __init__(self, args, kwargs, f_name, ret, child_methods):
+class Call(object):
+    __slots__ = "f", "args", "kwargs", "ret", "child_methods"
+
+    def __init__(self, f, args, kwargs):
+        self.f = f
         self.args = args
         self.kwargs = kwargs
-        self.f_name = f_name
-        self.ret = ret
-        self.child_methods = child_methods
+        self.ret = None
+        self.child_methods = []
 
     def __str__(self):
-        return "%s -> child_methods: %s" % (self.nodestr(), self.child_methods)
-
-    def nodestr(self):
-        return "{0.ret} = {0.fn_name}{1}".format(self, self.argstr())
-
-    def argstr(self):
         s_args = ", ".join(map(str, self.args))
-        s_kwargs = ", ".join(
-            "{0}={1}".format(k, v) for k, v in self.kwargs.items())
-        return s_args + s_kwargs
+        s_kwargs = ", ".join("{0}={1}".format(k, v)
+                             for k, v in self.kwargs.items())
+        return "{0}({1}) | ret: {2}".format(
+            self.f.__name__, s_args + s_kwargs, self.ret)
 
 
 class viz(object):
@@ -83,7 +80,7 @@ class viz(object):
     def __init__(self, wrapped):
         self.wrapped = wrapped
         self.verbose = False
-        self.cg = callgraph()
+        self.cg = CallGraph()
 
     def __call__(self, *args, **kwargs):
         g_callers = self.cg.callers
@@ -111,8 +108,7 @@ class viz(object):
             g_frames.append(fullstack[0][0])
 
         if this_frame_id not in g_callers:
-            g_callers[this_frame_id] = node_data(
-                args, kwargs, self.wrapped.__name__, None, [])
+            g_callers[this_frame_id] = Call(self.wrapped, args, kwargs)
 
         if caller_frame_id in g_callers:
             g_callers[caller_frame_id].child_methods.append(this_frame_id)

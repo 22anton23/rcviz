@@ -21,7 +21,7 @@ setup(
     author='Ran',
     author_email='dugal@gmx.com',
     url='https://github.com/carlsborg/rcviz',
-    packages=['rcviz'],
+    py_modules=['rcviz'],
     include_package_data=True,
     install_requires=['pygraphviz'],
     zip_safe=False,
