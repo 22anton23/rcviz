@@ -51,7 +51,7 @@ class CallGraph(object):
         g.layout()
         g.draw(path=filename, prog='dot')
 
-        print("callviz: rendered to %s" % filename)
+        print("rendered to %s" % filename)
         self.clear()
 
 
