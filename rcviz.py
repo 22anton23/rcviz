@@ -1,6 +1,6 @@
 # rcviz : a small recursion call graph vizualization decorator
 # Copyright (c) Ran Dugal 2014
-#               Sergei Lebedev 2015
+#               Sergei Lebedev 2015-2016
 # Licensed under the GPLv2, which is available at
 # http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -19,7 +19,7 @@ class CallGraph(object):
 
     def clear(self):
         self.callers.clear()
-        self.frames.clear()
+        del self.frames[:]
         self.depth = 0
 
     def render(self, filename):
